@@ -1,5 +1,7 @@
+Require Import Coq.Strings.Ascii.
 Require Import ListString.All.
 
+Local Open Scope char.
 Local Open Scope type.
 
 (** External calls. *)
@@ -74,9 +76,19 @@ End C.
 
 Module Example.
   Import C.Notations.
-  
+
   Definition read_and_print : C.t unit :=
     call! s := Command.Read in
     do_call! Command.Log s in
     ret tt.
+
+  Fixpoint constant_read {A : Type} (x : C.t A) (s : LString.t) : C.t A :=
+    match x with
+    | C.Ret _ => x
+    | C.Call Command.Read handler => constant_read (handler s) s
+    | C.Call command handler => C.Call command (fun answer =>
+      constant_read (handler answer) s)
+    end.
+
+  Compute constant_read read_and_print (LString.s "hello").
 End Example.
