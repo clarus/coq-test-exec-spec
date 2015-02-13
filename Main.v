@@ -8,14 +8,22 @@ Local Open Scope type.
 Module Command.
   Inductive t :=
   | Log (message : LString.t)
+  | ReadX
+  | WriteX (value : LString.t)
+  | ReadY
+  | WriteY (value : LString.t)
   | Read
-  | Write (value : LString.t).
+  | Write (values : LString.t * LString.t).
 
   (** The type of an answer for a command depends on the value of the command. *)
   Definition answer (command : t) : Type :=
     match command with
     | Log _ => unit
-    | Read => LString.t
+    | ReadX => LString.t
+    | WriteX _ => unit
+    | ReadY => LString.t
+    | WriteY _ => unit
+    | Read => LString.t * LString.t
     | Write _ => unit
     end.
 End Command.
@@ -77,18 +85,55 @@ End C.
 Module Example.
   Import C.Notations.
 
-  Definition read_and_print : C.t unit :=
-    call! s := Command.Read in
-    do_call! Command.Log s in
-    ret tt.
+  Module OneRead.
+    Definition read_and_print : C.t unit :=
+      call! s := Command.ReadX in
+      do_call! Command.Log s in
+      ret tt.
 
-  Fixpoint constant_read {A : Type} (x : C.t A) (s : LString.t) : C.t A :=
-    match x with
-    | C.Ret _ => x
-    | C.Call Command.Read handler => constant_read (handler s) s
-    | C.Call command handler => C.Call command (fun answer =>
-      constant_read (handler answer) s)
-    end.
+    Fixpoint exec {A : Type} (x : C.t A) (s : LString.t) : C.t A :=
+      match x with
+      | C.Ret _ => x
+      | C.Call Command.ReadX handler => exec (handler s) s
+      | C.Call command handler => C.Call command (fun answer =>
+        exec (handler answer) s)
+      end.
 
-  Compute constant_read read_and_print (LString.s "hello").
+    Compute exec read_and_print (LString.s "hello").
+  End OneRead.
+
+  Module WritesReads.
+    Definition writes_reads : C.t unit :=
+      do_call! Command.WriteX (LString.s "hello") in
+      do_call! Command.WriteY (LString.s "world") in
+      call! s_x := Command.ReadX in
+      call! s_y := Command.ReadY in
+      do_call! Command.Log s_x in
+      do_call! Command.Log s_y in
+      ret tt.
+
+    Fixpoint exec {A : Type} (x : C.t A) : C.t A :=
+      match x with
+      | C.Ret _ => x
+      | C.Call Command.ReadX handler =>
+        call! s := Command.Read in
+        exec (handler (fst s))
+      | C.Call Command.ReadY handler =>
+        call! s := Command.Read in
+        exec (handler (snd s))
+      | C.Call (Command.WriteX s_x) handler =>
+        call! s := Command.Read in
+        do_call! Command.Write (s_x, snd s) in
+        exec (handler tt)
+      | C.Call (Command.WriteY s_y) handler =>
+        call! s := Command.Read in
+        do_call! Command.Write (fst s, s_y) in
+        exec (handler tt)
+      | C.Call command handler =>
+        call! answer := command in
+        exec (handler answer)
+      end.
+
+    Compute exec writes_reads.
+  End WritesReads.
 End Example.
