@@ -4,11 +4,17 @@ Local Open Scope type.
 
 (** External calls. *)
 Module Command.
-  Inductive t :=.
+  Inductive t :=
+  | Log (message : LString.t)
+  | Read
+  | Write (value : LString.t).
 
   (** The type of an answer for a command depends on the value of the command. *)
   Definition answer (command : t) : Type :=
     match command with
+    | Log _ => unit
+    | Read => LString.t
+    | Write _ => unit
     end.
 End Command.
 
@@ -65,3 +71,12 @@ Module C.
       (at level 200, X at level 100, Y at level 200).
   End Notations.
 End C.
+
+Module Example.
+  Import C.Notations.
+  
+  Definition read_and_print : C.t unit :=
+    call! s := Command.Read in
+    do_call! Command.Log s in
+    ret tt.
+End Example.
