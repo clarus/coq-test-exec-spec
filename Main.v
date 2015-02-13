@@ -1,6 +1,8 @@
+Require Import Coq.Lists.List.
 Require Import Coq.Strings.Ascii.
 Require Import ListString.All.
 
+Import ListNotations.
 Local Open Scope char.
 Local Open Scope type.
 
@@ -13,7 +15,8 @@ Module Command.
   | ReadY
   | WriteY (value : LString.t)
   | Read
-  | Write (values : LString.t * LString.t).
+  | Write (values : LString.t * LString.t)
+  | Error.
 
   (** The type of an answer for a command depends on the value of the command. *)
   Definition answer (command : t) : Type :=
@@ -25,6 +28,7 @@ Module Command.
     | WriteY _ => unit
     | Read => LString.t * LString.t
     | Write _ => unit
+    | Error => Empty_set
     end.
 End Command.
 
@@ -136,4 +140,28 @@ Module Example.
 
     Compute exec writes_reads.
   End WritesReads.
+
+  Module Exception.
+    Definition error {A : Type} : C.t A :=
+      call! e := Command.Error in
+      match e with end.
+
+    Definition test_non_empty (s : LString.t) : C.t LString.t :=
+      match s with
+      | [] => error
+      | _ => ret s
+      end.
+
+    Fixpoint exec {A : Type} (x : C.t A) : C.t (option A) :=
+      match x with
+      | C.Ret x => C.Ret (Some x)
+      | C.Call Command.Error _ => C.Ret None
+      | C.Call command handler =>
+        call! answer := command in
+        exec (handler answer)
+      end.
+
+    Compute exec (test_non_empty (LString.s "hello")).
+    Compute exec (test_non_empty (LString.s "")).
+  End Exception.
 End Example.
